@@ -1,54 +1,47 @@
-\# SKOS-Vokabulare: Klassifikation der Berufe (KldB 2010, Version 2020)
+# KldB- Klassifikation der Berufe - SkoHub TTL
 
+Dieses Repository enthält Python-Scripts zur Generierung von SKOS-konformen TTL-Vokabularen basierend auf der **Klassifikation der Berufe (KldB) 2010, Version 2020** der Bundesagentur für Arbeit.
 
+## 📋 Übersicht
 
-Dieses Repository enthält Turtle-Dateien (`.ttl`) mit SKOS-Vokabularen auf Basis der überarbeiteten KldB-Version 2020.
+Die Scripts konvertieren die offizielle KldB-CSV-Datei des Klassifikationsserver.de in hierarchische SKOS-Vokabulare mit Kurzbeschreibungen und Fertigkeiten für jede Berufsklassifikation.
 
+### Verfügbare Scripts
 
+| Script | Beschreibung | Ebenen | Ausgabe | Konzepte |
+|--------|-------------|--------|---------|----------|
+| `generate_kldb_4.py` | 4-Ebenen KldB Generator | 1-4 | `kldb-4.ttl` | 891 |
+| `generate_kldb_5.py` | Vollständiger 5-Ebenen Generator | 1-5 | `kldb-5.ttl` | 2.192 |
 
-\## Dateien
+## 🗂️ Datenquelle
 
+**Input-Datei:** `KldB_2010,_V._2020-DE-2025-02-03-Gliederung_mit_Erläuterung.csv`
 
+**Quelle:** [Bundesagentur für Arbeit - Klassifikation der Berufe](https://statistik.arbeitsagentur.de/DE/Navigation/Grundlagen/Klassifikationen/Klassifikation-der-Berufe/KldB2010-Fassung2020/Systematik-Verzeichnisse/Systematik-Verzeichnisse-Nav.html)
 
-\- `kldb\_ebene\_4.ttl` – KldB bis Ebene 4 (Berufsuntergruppen)  
+### CSV-Struktur
+- **Spalte 0:** Schlüssel KldB 2010 (ID)
+- **Spalte 1:** Ebene (1-5)
+- **Spalte 2:** Titel (Vollständiger Name)
+- **Spalte 3:** Kurztitel (Abgekürzter Name)
+- **Spalte 4:** Allgemeine Bemerkungen → `skos:definition`
+- **Spalte 5:** Einschlüsse → `skos:note` (Fertigkeiten/Aktivitäten)
+- **Spalte 6:** Umfasst ferner
+- **Spalte 7:** Ausschlüsse
 
-\- `kldb\_ebene\_5.ttl` – KldB bis Ebene 5 (Berufsgattungen)  
+## 🚀 Verwendung
 
-\- `kldb\_ebene\_4\_cleaned.ttl` / `kldb\_ebene\_5\_cleaned.ttl` – Bereinigt und validiert mit `ttl-cleaner`:  
+### Voraussetzungen
 
-&nbsp; - doppelte `altLabel` entfernt  
+```bash
+pip install pandas
+```
 
-&nbsp; - einheitlich formatiert  
+### 4-Ebenen KldB generieren
 
-&nbsp; - SKOS-konform  
+```bash
+python generate_kldb_4.py
+```
 
-
-
-\## Struktur und Anreicherung
-
-
-
-\- `skos:prefLabel` – Bezeichnung  
-
-\- `skos:altLabel` – alternative Bezeichnungen  
-
-\- `skos:notation` – KldB-Code  
-
-\- `skos:definition` – Kurzbeschreibungen aus dem Klassifikationsserver (2020)  
-
-\- `skos:note` – Typische Tätigkeiten  
-
-
-
-\## Nutzung
-
-
-
-Einsatz z. B. mit:
-
-\- \[skohub.io](https://skohub.io/)
-
-\- semantische Suche
-
-\- Matching-Dienste für Bildungs- und Berufsdaten
+**Ausgabe:** `kldb-4.ttl` (891 Konzepte bis 4-stellige Codes)
 
