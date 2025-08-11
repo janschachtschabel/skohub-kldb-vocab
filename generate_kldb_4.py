@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-KldB-4-neu TTL Generator Script
+KldB-4-Ebenen TTL Generator Script
 
-Dieses Script erstellt eine hierarchische KldB-4-neu.ttl bis Ebene 4 (4-stellige Codes)
+Dieses Script erstellt eine vollständige hierarchische KldB-TTL mit den ersten 4 Ebenen
 mit der Struktur ähnlich kldb.ttl, aber angereichert mit:
 - Spalte 4 (Allgemeine Bemerkungen) → skos:definition
 - Spalte 5 (Einschlüsse) → skos:note (für Fertigkeiten/Aktivitäten)
 
 Basiert auf: KldB_2010,_V._2020-DE-2025-02-03-Gliederung_mit_Erläuterung.csv
 
-Usage: python generate_kldb_4_neu.py
+Usage: python generate_kldb_4.py
 """
 
 import pandas as pd
@@ -25,7 +25,7 @@ if os.name == 'nt':
     os.system('chcp 65001 > nul')
 
 
-class KldB4NeuGenerator:
+class KldB4EbenenGenerator:
     def __init__(self):
         self.csv_data = None
         self.concepts = {}  # Dict[str, Dict] - speichert alle Konzepte
@@ -97,15 +97,27 @@ class KldB4NeuGenerator:
         
         return text.strip()
     
+    def normalize_kldb_id(self, raw_id: str, ebene: int) -> str:
+        """Normalisiere KldB-ID mit führenden Nullen basierend auf Ebene"""
+        raw_id = str(raw_id).strip()
+        
+        # Bestimme erwartete Länge basierend auf Ebene
+        expected_length = ebene
+        
+        # Fülle mit führenden Nullen auf
+        normalized_id = raw_id.zfill(expected_length)
+        
+        return normalized_id
+    
     def parse_csv_data(self) -> bool:
         """Parse CSV-Daten und baue Hierarchie auf"""
         if self.csv_data is None:
             print("[ERROR] Keine CSV-Daten geladen")
             return False
         
-        print("[INFO] Parse CSV-Daten und baue Hierarchie...")
+        print("[INFO] Parse CSV-Daten und baue Hierarchie für alle 4 Ebenen...")
         
-        # Filtere nur Ebenen 1-4 (bis 4-stellige Codes)
+        # Filtere alle Ebenen 1-4
         filtered_data = self.csv_data[
             (self.csv_data['ebene'].astype(int) >= 1) & 
             (self.csv_data['ebene'].astype(int) <= 4)
@@ -118,7 +130,7 @@ class KldB4NeuGenerator:
         
         # Baue Konzepte auf
         for _, row in filtered_data.iterrows():
-            kldb_id = str(row['kldb_id']).strip()
+            raw_kldb_id = str(row['kldb_id']).strip()
             ebene = int(row['ebene'])
             titel = self.clean_text(row['titel'])
             kurztitel = self.clean_text(row['kurztitel'])
@@ -126,8 +138,13 @@ class KldB4NeuGenerator:
             einschluesse = self.clean_text(row['einschluesse'])
             
             # Überspringe leere IDs
-            if not kldb_id or kldb_id == '':
+            if not raw_kldb_id or raw_kldb_id == '':
                 continue
+            
+            # Normalisiere ID mit führenden Nullen
+            kldb_id = self.normalize_kldb_id(raw_kldb_id, ebene)
+            
+            print(f"[DEBUG] Raw ID: '{raw_kldb_id}' -> Normalized ID: '{kldb_id}' (Ebene {ebene})")
             
             # Erstelle Konzept
             concept = {
@@ -143,7 +160,7 @@ class KldB4NeuGenerator:
             
             self.concepts[kldb_id] = concept
             
-            # Bestimme Parent basierend auf ID-Länge
+            # Bestimme Parent basierend auf normalisierter ID und Ebene
             if ebene > 1:
                 parent_id = self.get_parent_id(kldb_id, ebene)
                 if parent_id and parent_id in self.concepts:
@@ -161,21 +178,15 @@ class KldB4NeuGenerator:
         return True
     
     def get_parent_id(self, kldb_id: str, ebene: int) -> Optional[str]:
-        """Bestimme Parent-ID basierend auf KldB-Hierarchie"""
+        """Bestimme Parent-ID basierend auf KldB-Hierarchie für alle 4 Ebenen"""
         if ebene <= 1:
             return None
         
-        # Ebene 2: Parent ist 1-stellig (z.B. 11 -> 1)
-        if ebene == 2 and len(kldb_id) >= 2:
-            return kldb_id[0]
+        # Parent hat immer eine Stelle weniger als das Kind
+        parent_length = ebene - 1
         
-        # Ebene 3: Parent ist 2-stellig (z.B. 111 -> 11)
-        elif ebene == 3 and len(kldb_id) >= 3:
-            return kldb_id[:2]
-        
-        # Ebene 4: Parent ist 3-stellig (z.B. 1110 -> 111)
-        elif ebene == 4 and len(kldb_id) >= 4:
-            return kldb_id[:3]
+        if len(kldb_id) >= ebene:
+            return kldb_id[:parent_length]
         
         return None
     
@@ -200,8 +211,8 @@ class KldB4NeuGenerator:
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <> a skos:ConceptScheme ;
-\tdct:title "Klassifikation der Berufe - KldB 4-stellig (neu)"@de ;
-\tdct:description "Hierarchische KldB bis Ebene 4 mit Kurzbeschreibungen und Fertigkeiten aus KldB 2010 V. 2020"@de ;
+\tdct:title "Klassifikation der Berufe - KldB 4-stellig (vollständig)"@de ;
+\tdct:description "Vollständige hierarchische KldB mit allen 4 Ebenen und Kurzbeschreibungen aus KldB 2010 V. 2020"@de ;
 \tdct:created "{today}"^^xsd:date ;
 \tskos:hasTopConcept {top_concept_refs} .
 
@@ -214,13 +225,13 @@ class KldB4NeuGenerator:
         
         ttl_lines = [f"<{concept_id}> a skos:Concept ;"]
         
-        # Titel (prefLabel)
-        if concept['titel']:
-            ttl_lines.append(f'\tskos:prefLabel "{concept["titel"]}"@de ;')
+        # Kurztitel (prefLabel) - bevorzugtes, kürzeres Label
+        if concept['kurztitel']:
+            ttl_lines.append(f'\tskos:prefLabel "{concept["kurztitel"]}"@de ;')
         
-        # Kurztitel (altLabel) - nur wenn unterschiedlich vom Titel
-        if concept['kurztitel'] and concept['kurztitel'] != concept['titel']:
-            ttl_lines.append(f'\tskos:altLabel "{concept["kurztitel"]}"@de ;')
+        # Titel (altLabel) - nur wenn unterschiedlich vom Kurztitel
+        if concept['titel'] and concept['titel'] != concept['kurztitel']:
+            ttl_lines.append(f'\tskos:altLabel "{concept["titel"]}"@de ;')
         
         # Definition (aus Allgemeine Bemerkungen)
         if concept['definition']:
@@ -288,7 +299,7 @@ class KldB4NeuGenerator:
     def print_statistics(self):
         """Drucke Statistiken"""
         print("\n" + "="*60)
-        print("STATISTIKEN")
+        print("STATISTIKEN - ALLE 4 EBENEN")
         print("="*60)
         
         # Konzepte pro Ebene
@@ -314,12 +325,12 @@ class KldB4NeuGenerator:
 
 def main() -> bool:
     """Hauptfunktion"""
-    print("KldB-4-neu TTL Generator")
+    print("KldB-4-Ebenen TTL Generator")
     print("="*50)
     
     # Dateipfade
     csv_file = "KldB_2010,_V._2020-DE-2025-02-03-Gliederung_mit_Erläuterung.csv"
-    output_file = "kldb-4-neu.ttl"
+    output_file = "kldb4.ttl"
     
     # Prüfe ob CSV-Datei existiert
     if not Path(csv_file).exists():
@@ -327,7 +338,7 @@ def main() -> bool:
         return False
     
     # Generator initialisieren
-    generator = KldB4NeuGenerator()
+    generator = KldB4EbenenGenerator()
     
     # CSV-Daten laden
     if not generator.load_csv_data(csv_file):
@@ -344,7 +355,7 @@ def main() -> bool:
     # Statistiken ausgeben
     generator.print_statistics()
     
-    print(f"\n[SUCCESS] KldB-4-neu.ttl erfolgreich erstellt!")
+    print(f"\n[SUCCESS] KldB-4-Ebenen.ttl erfolgreich erstellt!")
     print(f"[INFO] Ausgabedatei: {output_file}")
     
     return True

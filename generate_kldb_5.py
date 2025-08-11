@@ -97,6 +97,18 @@ class KldB5EbenenGenerator:
         
         return text.strip()
     
+    def normalize_kldb_id(self, raw_id: str, ebene: int) -> str:
+        """Normalisiere KldB-ID mit führenden Nullen basierend auf Ebene"""
+        raw_id = str(raw_id).strip()
+        
+        # Bestimme erwartete Länge basierend auf Ebene
+        expected_length = ebene
+        
+        # Fülle mit führenden Nullen auf
+        normalized_id = raw_id.zfill(expected_length)
+        
+        return normalized_id
+    
     def parse_csv_data(self) -> bool:
         """Parse CSV-Daten und baue Hierarchie auf"""
         if self.csv_data is None:
@@ -118,7 +130,7 @@ class KldB5EbenenGenerator:
         
         # Baue Konzepte auf
         for _, row in filtered_data.iterrows():
-            kldb_id = str(row['kldb_id']).strip()
+            raw_kldb_id = str(row['kldb_id']).strip()
             ebene = int(row['ebene'])
             titel = self.clean_text(row['titel'])
             kurztitel = self.clean_text(row['kurztitel'])
@@ -126,8 +138,13 @@ class KldB5EbenenGenerator:
             einschluesse = self.clean_text(row['einschluesse'])
             
             # Überspringe leere IDs
-            if not kldb_id or kldb_id == '':
+            if not raw_kldb_id or raw_kldb_id == '':
                 continue
+            
+            # Normalisiere ID mit führenden Nullen
+            kldb_id = self.normalize_kldb_id(raw_kldb_id, ebene)
+            
+            print(f"[DEBUG] Raw ID: '{raw_kldb_id}' -> Normalized ID: '{kldb_id}' (Ebene {ebene})")
             
             # Erstelle Konzept
             concept = {
@@ -143,7 +160,7 @@ class KldB5EbenenGenerator:
             
             self.concepts[kldb_id] = concept
             
-            # Bestimme Parent basierend auf ID-Länge und Ebene
+            # Bestimme Parent basierend auf normalisierter ID und Ebene
             if ebene > 1:
                 parent_id = self.get_parent_id(kldb_id, ebene)
                 if parent_id and parent_id in self.concepts:
@@ -165,21 +182,11 @@ class KldB5EbenenGenerator:
         if ebene <= 1:
             return None
         
-        # Ebene 2: Parent ist 1-stellig (z.B. 11 -> 1)
-        if ebene == 2 and len(kldb_id) >= 2:
-            return kldb_id[0]
+        # Parent hat immer eine Stelle weniger als das Kind
+        parent_length = ebene - 1
         
-        # Ebene 3: Parent ist 2-stellig (z.B. 111 -> 11)
-        elif ebene == 3 and len(kldb_id) >= 3:
-            return kldb_id[:2]
-        
-        # Ebene 4: Parent ist 3-stellig (z.B. 1110 -> 111)
-        elif ebene == 4 and len(kldb_id) >= 4:
-            return kldb_id[:3]
-        
-        # Ebene 5: Parent ist 4-stellig (z.B. 11101 -> 1110)
-        elif ebene == 5 and len(kldb_id) >= 5:
-            return kldb_id[:4]
+        if len(kldb_id) >= ebene:
+            return kldb_id[:parent_length]
         
         return None
     
@@ -218,13 +225,13 @@ class KldB5EbenenGenerator:
         
         ttl_lines = [f"<{concept_id}> a skos:Concept ;"]
         
-        # Titel (prefLabel)
-        if concept['titel']:
-            ttl_lines.append(f'\tskos:prefLabel "{concept["titel"]}"@de ;')
+        # Kurztitel (prefLabel) - bevorzugtes, kürzeres Label
+        if concept['kurztitel']:
+            ttl_lines.append(f'\tskos:prefLabel "{concept["kurztitel"]}"@de ;')
         
-        # Kurztitel (altLabel) - nur wenn unterschiedlich vom Titel
-        if concept['kurztitel'] and concept['kurztitel'] != concept['titel']:
-            ttl_lines.append(f'\tskos:altLabel "{concept["kurztitel"]}"@de ;')
+        # Titel (altLabel) - nur wenn unterschiedlich vom Kurztitel
+        if concept['titel'] and concept['titel'] != concept['kurztitel']:
+            ttl_lines.append(f'\tskos:altLabel "{concept["titel"]}"@de ;')
         
         # Definition (aus Allgemeine Bemerkungen)
         if concept['definition']:
@@ -330,7 +337,7 @@ def main() -> bool:
     
     # Dateipfade
     csv_file = "KldB_2010,_V._2020-DE-2025-02-03-Gliederung_mit_Erläuterung.csv"
-    output_file = "kldb-5-ebenen.ttl"
+    output_file = "kldb5.ttl"
     
     # Prüfe ob CSV-Datei existiert
     if not Path(csv_file).exists():
